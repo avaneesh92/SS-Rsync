@@ -35,6 +35,7 @@
 #include "mongoose.h"
 #endif
 int mg_pid;
+extern int enable_http;
 extern windows_flag ;  // flag to check whether remote operating system is windows or not ? if -w option is given then winexe is called
 extern int https_port ;    // https_port is declared in options.c , we are just importing this into main.c file 
 extern int dry_run;
@@ -594,7 +595,11 @@ arg_overflow:
 	} else {
 		printf("****\n\n Before piped child");
 		//fflush(1);	
-		pid = piped_child(args, f_in_p, f_out_p);
+		if(enable_http == 1)
+			pid = piped_child_http(args, f_in_p, f_out_p);
+		else
+			pid = piped_child(args, f_in_p, f_out_p);
+
 		printf("****\n\n after piped child");
 
 #ifdef ICONV_CONST
@@ -1566,6 +1571,10 @@ static int start_client(int argc, char *argv[])
 
 		//	if(http_pid != 0)
 		//{
+		FILE *fn;
+		fn = fopen("testh.txt","a");
+		fprintf(fn,"%d", enable_http);
+		fclose(fn);
 		pid = do_cmd(shell_cmd, shell_machine, shell_user, remote_argv, remote_argc,&f_in, &f_out,http_pid);
 		sleep(10);
 
@@ -1586,13 +1595,19 @@ static int start_client(int argc, char *argv[])
 		//printf("\n\nValus of f_in and f_out: %d %d", f_in, f_out);
 		fflush(stdout);
 		fflush(stderr);
+		if(enable_http == 1){
+			http_pid = do_over_http(&f_in, &f_out, shell_machine);
+			printf("\n\nValus of f_in and f_out: %d %d", f_in, f_out);
 
-		http_pid = do_over_http(&f_in, &f_out, shell_machine);
-		printf("\n\nValus of f_in and f_out: %d %d", f_in, f_out);
-
-		if(http_pid != 0)
+			if(http_pid != 0){
+				ret = client_run(f_in, f_out, pid, argc, argv);
+				kill(http_pid, SIGKILL);
+			}
+		}
+		else{
+			printf("\n It comes here");
 			ret = client_run(f_in, f_out, pid, argc, argv);
-		kill(http_pid, SIGKILL);
+		}
 		fflush(stdout);
 		fflush(stderr);
 		//}
@@ -1954,49 +1969,50 @@ int main(int argc,char *argv[])
 		option_error();
 		exit_cleanup(RERR_SYNTAX);
 	}
+
 	//****----------------------------------------------------------------------------------------------------------------------------------
 	// STRIP THE 'N' OPTION FROM server sides command line here . and then assign the port no .
-/*	char * pp ; 
-	if (am_server)
-	{
+	/*	char * pp ; 
+		if (am_server)
+		{
 		if (am_sender) // 
 		{
-			//process argv [3] for taking option from -vloDtprze31.14iLs . /home/ajay/
+	//process argv [3] for taking option from -vloDtprze31.14iLs . /home/ajay/
 
-			fp = fopen("checkport.txt","w");	//process argv[2]
-			fprintf(fp,"\n N option not specified ");
-			pp =  (strchr(copy_orig_argv[3], 'N')) ;
-			if (pp)
-			{
-				fprintf(fp,"\nBefore assigning value :- %d\n\n", https_port);
-				https_portno = https_port ;	
-				fprintf(fp,"\n%d", https_port);
-				fprintf(fp,"\n\ncopy_argv[3] %s",copy_orig_argv[3]);
-			}
-			fclose(fp);
-		}
-		else 
-		{
-			fp = fopen("checkport.txt","w");	// if am_sender == false then process argv[2]
+	fp = fopen("checkport.txt","w");	//process argv[2]
+	fprintf(fp,"\n N option not specified ");
+	pp =  (strchr(copy_orig_argv[3], 'N')) ;
+	if (pp)
+	{
+	fprintf(fp,"\nBefore assigning value :- %d\n\n", https_port);
+	https_portno = https_port ;	
+	fprintf(fp,"\n%d", https_port);
+	fprintf(fp,"\n\ncopy_argv[3] %s",copy_orig_argv[3]);
+	}
+	fclose(fp);
+	}
+	else 
+	{
+	fp = fopen("checkport.txt","w");	// if am_sender == false then process argv[2]
 
-			pp =  (strchr(copy_orig_argv[2], 'N')) ;
-			if (pp)
-			{
-				fprintf(fp,"\nBefore assigning value :- %d\n\n", https_port);	
-				https_portno = https_port ;	
-				fprintf(fp,"\n%d", https_port);
-				fprintf(fp,"\n\ncopy_argv[2] %s",copy_orig_argv[2]);
+	pp =  (strchr(copy_orig_argv[2], 'N')) ;
+	if (pp)
+	{
+	fprintf(fp,"\nBefore assigning value :- %d\n\n", https_port);	
+	https_portno = https_port ;	
+	fprintf(fp,"\n%d", https_port);
+	fprintf(fp,"\n\ncopy_argv[2] %s",copy_orig_argv[2]);
 
-			}
-			else 
-			{
-				fprintf(fp,"\n N option not specified ");
-			}
-			fclose(fp);
-		}
+	}
+	else 
+	{
+	fprintf(fp,"\n N option not specified ");
+	}
+	fclose(fp);
+	}
 	}
 	//-------------------------------------------------------------------------------------------------------------------------
-*/	SIGACTMASK(SIGINT, sig_int);
+	 */	SIGACTMASK(SIGINT, sig_int);
 	SIGACTMASK(SIGHUP, sig_int);
 	SIGACTMASK(SIGTERM, sig_int);
 #if defined HAVE_SIGACTION && HAVE_SIGPROCMASK
@@ -2064,43 +2080,46 @@ int main(int argc,char *argv[])
 	}			
 
 	if (am_server) {
-	//	int mg_pid;	
+		//	int mg_pid;	
 		set_nonblocking(STDIN_FILENO);
 		set_nonblocking(STDOUT_FILENO);
 		if (am_daemon)
 			return start_daemon(STDIN_FILENO, STDOUT_FILENO);
+		if(enable_http == 1){
+			int mg_to_child[2],mg_from_child[2];
+			int mg_fd_in , mg_fd_out;
+			if(fd_pair(mg_to_child) < 0 || fd_pair(mg_from_child) < 0 )
+			{	
+				rsyserr(FERROR,errno, "pipe");
+				exit_cleanup(RERR_IPC);
+			}
 
-		int mg_to_child[2],mg_from_child[2];
-		int mg_fd_in , mg_fd_out;
-		if(fd_pair(mg_to_child) < 0 || fd_pair(mg_from_child) < 0 )
-		{	
-			rsyserr(FERROR,errno, "pipe");
-			exit_cleanup(RERR_IPC);
+			mg_pid = fork();
+			if (mg_pid == 0)
+			{
+				close (mg_to_child[1]);close(mg_from_child[0]);			 
+				mg_main(https_portno,mg_to_child[0],mg_from_child[1]); // this call does work
+			}
+			//pthread_join(mg_thread_id,NULL);Join waits for the thread to exit ,so start_server won't be called
+			//mg_main(aamche_portno);				
+			else // this is parent
+			{
+				FILE *fp333;
+				fp333 = fopen("parent.txt","a");
+				fprintf(fp333,"Inside parent\n");
+				close(mg_to_child[0]); close(mg_from_child[1]);
+				mg_fd_out = mg_to_child[1];
+				mg_fd_in = mg_from_child[0];	
+				start_server(mg_fd_in, mg_fd_out, argc, argv);
+				//kill(mg_pid, SIGKILL);
+				fprintf(fp333," process id of mongoose: %d", mg_pid);
+				fclose(fp333);
+			}
+			// ***SOLVED thread not compiling prob : added -pthread option in Makefile  
 		}
-
-		mg_pid = fork();
-		if (mg_pid == 0)
-		{
-			close (mg_to_child[1]);close(mg_from_child[0]);			 
-			mg_main(https_portno,mg_to_child[0],mg_from_child[1]); // this call does work
+		else{
+			start_server(STDIN_FILENO, STDOUT_FILENO, argc, argv);
 		}
-		//pthread_join(mg_thread_id,NULL);Join waits for the thread to exit ,so start_server won't be called
-		//mg_main(aamche_portno);				
-		else // this is parent
-		{
-			FILE *fp333;
-			fp333 = fopen("parent.txt","a");
-			fprintf(fp333,"Inside parent\n");
-			close(mg_to_child[0]); close(mg_from_child[1]);
-			mg_fd_out = mg_to_child[1];
-			mg_fd_in = mg_from_child[0];	
-			start_server(mg_fd_in, mg_fd_out, argc, argv);
-			//kill(mg_pid, SIGKILL);
-			fprintf(fp333," process id of mongoose: %d", mg_pid);
-			fclose(fp333);
-		}
-		// ***SOLVED thread not compiling prob : added -pthread option in Makefile  
-
 	}
 
 	ret = start_client(argc, argv);

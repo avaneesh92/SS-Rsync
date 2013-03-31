@@ -230,18 +230,6 @@ static NORETURN void whine_about_eof(BOOL allow_kluge)
 	exit_cleanup(RERR_STREAMIO);
 }
 
-static size_t safe_read(int, char *, size_t);
-
-
-void temp_read(int *f_in1,int *f_out1)
-{
-char buff[1024];
-size_t len=sizeof(buff);
-if(safe_read(*f_out1,buff,len))
-{
-printf("successful");
-}
-}
 /* Do a safe read, handling any needed looping and error handling.
  * Returns the count of the bytes read, which will only be different
  * from "len" if we encountered an EOF.  This routine is not used on
@@ -254,7 +242,7 @@ static size_t safe_read(int fd, char *buf, size_t len)
 	int n;
 
 	assert(fd != iobuf.in_fd);
-	printf("\n\n-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_--_-_\nsize of the data buf  in safe_read is %d",len);
+//	printf("\n\n-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_--_-_\nsize of the data buf  in safe_read is %d",len);
 	n = read(fd, buf, len);
         fprintf(fp11,"buf: %s", buf);
 	if ((size_t)n == len || n == 0) {
@@ -343,13 +331,12 @@ static void safe_write(int fd, const char *buf, size_t len)
 	FILE *fp4;
 	fp4 = fopen("safewr.txt","a");
 	int n;
-	int temp_n;
 	assert(fd != iobuf.out_fd);
-        printf("\n\n\nbefore Value of fd for safe write function: %d and buf: %s", fd, buf);
+       // printf("\n\n\nbefore Value of fd for safe write function: %d and buf: %s", fd, buf);
 	n = write(fd, buf, len);
         fprintf(fp4, "buf: %s \n", buf);
         fclose(fp4);
-        printf("\n////////////////////This is the error %s %d ", strerror(errno), n)	;
+       // printf("\n////////////////////This is the error %s %d ", strerror(errno), n)	;
 	if ((size_t)n == len)
 		return;
 	if (n < 0) {

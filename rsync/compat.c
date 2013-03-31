@@ -137,7 +137,7 @@ void setup_protocol(int f_out,int f_in)
         char *buf, byte, *buf1;
 	FILE *fp6;
 	fp6 = fopen("set11.txt", "w");
-	printf("\n** value of the f_in: %d", f_in);
+//	printf("\n** value of the f_in: %d", f_in);
 	/*n = write(f_out,"AJAY !! \0",9);
 	printf(".........................%d bytes write",n);
 	
@@ -181,7 +181,7 @@ void setup_protocol(int f_out,int f_in)
 		if (am_server && !local_server)
 			check_sub_protocol();
 		if (!read_batch)
-	printf("\n\n\n\n\ Before write int");
+//	printf("\n\n\n\n\ Before write int");
 		write_int(f_out, protocol_version);	
 //	free(buf);
 /*	if(read(f_in, &byte, 1) == 1)
@@ -197,6 +197,7 @@ void setup_protocol(int f_out,int f_in)
 */		//free(buf);
 	
 		remote_protocol = read_int(f_in);
+		printf("\n\n remote: %d", remote_protocol);
  	fprintf(fp6,"buf 1: %d\n", remote_protocol);
 		fclose(fp6);
 		if (protocol_version > remote_protocol)
